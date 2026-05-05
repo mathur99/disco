@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disco — Ad Performance Predictor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --purple:  #7C5CBF;
+    --teal:    #00B4D8;
+    --pink:    #F72585;
+    --bg:      #0D0D1A;
+    --card:    #16162A;
+    --border:  #2A2A45;
+    --text:    #E2E2F0;
+    --muted:   #8888AA;
+    --green:   #06D6A0;
+    --yellow:  #FFD166;
+    --red:     #EF476F;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  .header { background: var(--card); border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; gap: 16px; }
+  .header-logo { font-size: 22px; font-weight: 800; background: linear-gradient(135deg, var(--purple), var(--teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px; }
+  .header-sub { color: var(--muted); font-size: 13px; }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: calc(100vh - 57px); }
+
+  /* SIDEBAR */
+  .sidebar { background: var(--card); border-right: 1px solid var(--border); padding: 24px 20px; overflow-y: auto; }
+  .sidebar h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 16px; }
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--purple); margin: 20px 0 10px; }
+
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .form-group select, .form-group input[type="number"] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 8px; font-size: 13px; outline: none;
+    transition: border-color .2s;
+  }
+  .form-group select:focus, .form-group input:focus { border-color: var(--purple); }
+  .form-group select option { background: #1A1A2E; }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; accent-color: var(--purple); }
+  .slider-val { font-size: 13px; font-weight: 600; color: var(--teal); min-width: 55px; text-align: right; }
+
+  .checks { display: flex; gap: 10px; flex-wrap: wrap; }
+  .check-pill { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; cursor: pointer; font-size: 12px; transition: all .2s; }
+  .check-pill:hover { border-color: var(--purple); }
+  .check-pill input { accent-color: var(--purple); }
+  .check-pill.active { border-color: var(--purple); background: rgba(124,92,191,0.15); }
+
+  .predict-btn {
+    width: 100%; margin-top: 20px; padding: 13px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--purple), var(--teal));
+    border: none; color: #fff; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: opacity .2s; letter-spacing: 0.3px;
+  }
+  .predict-btn:hover { opacity: .88; }
+  .predict-btn:active { opacity: .75; }
+
+  /* MAIN CONTENT */
+  .main { padding: 28px 32px; overflow-y: auto; }
+
+  /* EMPTY STATE */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 16px; color: var(--muted); text-align: center; }
+  .empty-icon { font-size: 56px; opacity: .4; }
+  .empty-state h3 { font-size: 18px; color: var(--text); }
+  .empty-state p { font-size: 14px; max-width: 340px; line-height: 1.6; }
+
+  /* RESULTS */
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .result-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
+  .result-title { font-size: 18px; font-weight: 700; }
+  .result-subtitle { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .sim-btn {
+    display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    border: none; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: opacity .2s; white-space: nowrap;
+  }
+  .sim-btn:hover { opacity: .85; }
+
+  /* METRIC CARDS */
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+
+  .metric-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; text-align: center; position: relative; overflow: hidden;
+  }
+  .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
+  .metric-card.ctr::before  { background: linear-gradient(90deg, var(--purple), var(--teal)); }
+  .metric-card.cvr::before  { background: linear-gradient(90deg, var(--teal), var(--green)); }
+  .metric-card.ecvr::before { background: linear-gradient(90deg, var(--pink), var(--purple)); }
+
+  .metric-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+  .metric-big { font-size: 36px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .metric-big.ctr-color  { color: var(--purple); }
+  .metric-big.cvr-color  { color: var(--teal); }
+  .metric-big.ecvr-color { color: var(--pink); }
+  .metric-plain { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 6px; }
+  .metric-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; margin-top: 8px;
+  }
+  .badge-up   { background: rgba(6,214,160,.15); color: var(--green); }
+  .badge-down { background: rgba(239,71,111,.15); color: var(--red); }
+  .badge-flat { background: rgba(136,136,170,.15); color: var(--muted); }
+
+  /* CHARTS ROW */
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .chart-card h3 { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 16px; text-align: center; }
+  .chart-wrap { position: relative; height: 160px; }
+
+  /* FUNNEL */
+  .funnel-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 24px; }
+  .funnel-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 20px; }
+  .funnel { display: flex; align-items: stretch; gap: 0; }
+  .funnel-stage { flex: 1; text-align: center; position: relative; }
+  .funnel-bar-wrap { display: flex; justify-content: center; align-items: flex-end; height: 90px; margin-bottom: 10px; }
+  .funnel-bar { border-radius: 6px 6px 0 0; width: 70%; min-height: 8px; transition: height .5s ease; }
+  .funnel-bar.impressions { background: linear-gradient(180deg, var(--purple), rgba(124,92,191,.4)); }
+  .funnel-bar.clicks      { background: linear-gradient(180deg, var(--teal),   rgba(0,180,216,.4)); }
+  .funnel-bar.converts    { background: linear-gradient(180deg, var(--green),  rgba(6,214,160,.4)); }
+  .funnel-num { font-size: 22px; font-weight: 800; }
+  .funnel-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .funnel-arrow { display: flex; align-items: center; color: var(--border); font-size: 20px; padding-bottom: 36px; }
+
+  /* CONTEXT INSIGHTS */
+  .insights-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+  .insight-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .insight-card h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 12px; }
+  .insight-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .insight-row:last-child { border-bottom: none; }
+  .insight-key { color: var(--muted); }
+  .insight-val { font-weight: 600; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .tag-purple { background: rgba(124,92,191,.2); color: var(--purple); }
+  .tag-teal   { background: rgba(0,180,216,.2);  color: var(--teal); }
+  .tag-green  { background: rgba(6,214,160,.2);  color: var(--green); }
+  .tag-yellow { background: rgba(255,209,102,.2);color: var(--yellow); }
+
+  /* SIMULATION MODAL */
+  .sim-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,.85); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+  }
+  .sim-overlay.active { display: flex; }
+  .sim-modal {
+    width: 860px; max-width: 95vw; max-height: 92vh; overflow: hidden;
+    border-radius: 16px; background: #1A1A2E; border: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .sim-modal-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card);
+  }
+  .sim-modal-title { font-size: 15px; font-weight: 700; }
+  .sim-close { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+  .sim-close:hover { color: var(--text); }
+
+  .sim-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Fake browser */
+  .fake-browser { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .browser-bar { background: #111125; padding: 8px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+  .browser-dots { display: flex; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #FF5F57; } .dot-y { background: #FEBC2E; } .dot-g { background: #28C840; }
+  .url-bar { flex: 1; background: #1C1C35; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+
+  .page-content { flex: 1; overflow-y: auto; padding: 24px; background: #F5F5FA; color: #222; font-family: -apple-system, sans-serif; position: relative; }
+
+  /* Fake order page */
+  .order-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .store-logo { font-size: 20px; font-weight: 800; color: #333; }
+  .order-badge { background: #E8F5E9; color: #2E7D32; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+  .order-confirm { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #E5E5E5; }
+  .order-confirm h2 { font-size: 16px; color: #333; margin-bottom: 8px; }
+  .order-confirm p  { font-size: 13px; color: #666; }
+
+  /* Disco widget */
+  .disco-widget {
+    background: #fff; border-radius: 12px; padding: 18px;
+    border: 1px solid #E5E5E5; opacity: 0; transform: translateY(10px);
+    transition: opacity .5s, transform .5s; position: relative;
+  }
+  .disco-widget.show { opacity: 1; transform: translateY(0); }
+  .widget-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .widget-header span { font-size: 13px; font-weight: 700; color: #555; }
+  .disco-tag { font-size: 10px; color: #999; background: #F5F5F5; padding: 2px 8px; border-radius: 10px; }
+  .brand-card { display: flex; align-items: center; gap: 14px; padding: 12px; background: #F8F8FF; border-radius: 10px; border: 1px solid #EEE; }
+  .brand-icon { width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .brand-info { flex: 1; }
+  .brand-info h3 { font-size: 15px; font-weight: 800; color: #222; margin-bottom: 3px; }
+  .brand-info p  { font-size: 12px; color: #666; line-height: 1.4; }
+  .brand-cat-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 8px; background: #EEE8FF; color: #6C3FC8; margin-top: 4px; }
+  .shop-btn {
+    padding: 10px 18px; border-radius: 8px; border: none;
+    background: linear-gradient(135deg, #7C5CBF, #00B4D8);
+    color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    position: relative; overflow: hidden;
+  }
+  .shop-btn.pulse { animation: pulse-glow 1s ease-in-out; }
+  @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 0 0 rgba(124,92,191,0.6); } 50% { box-shadow: 0 0 0 12px rgba(124,92,191,0); } }
+
+  /* Animated cursor */
+  .cursor {
+    position: fixed; pointer-events: none; z-index: 9999;
+    width: 22px; height: 22px; opacity: 0; transition: opacity .3s;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
+  }
+  .cursor.show { opacity: 1; }
+
+  /* Sim status bar */
+  .sim-status { padding: 14px 20px; background: var(--bg); border-top: 1px solid var(--border); }
+  .sim-steps { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .sim-step { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--border); color: var(--muted); transition: all .3s; }
+  .sim-step.active { background: var(--purple); color: #fff; }
+  .sim-step.done   { background: rgba(6,214,160,.2); color: var(--green); }
+  .sim-step.failed { background: rgba(239,71,111,.2); color: var(--red); }
+
+  .sim-outcome { display: none; text-align: center; padding: 8px; }
+  .sim-outcome.show { display: block; }
+  .outcome-icon { font-size: 28px; }
+  .outcome-text { font-size: 14px; font-weight: 700; margin-top: 4px; }
+  .outcome-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .sim-controls { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+  .sim-run-btn {
+    padding: 8px 20px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer;
+    background: linear-gradient(135deg, var(--purple), var(--teal)); color: #fff; transition: opacity .2s;
+  }
+  .sim-run-btn:hover { opacity: .85; }
+  .sim-run-btn:disabled { opacity: .4; cursor: default; }
+
+  /* Confetti-style celebration */
+  .confetti-wrap { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .confetti-piece { position: absolute; width: 8px; height: 8px; border-radius: 2px; animation: confetti-fall 1.5s ease-in forwards; }
+  @keyframes confetti-fall { 0% { opacity:1; transform: translateY(-10px) rotate(0); } 100% { opacity:0; transform: translateY(200px) rotate(720deg); } }
+
+  /* Speed toggle */
+  .speed-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .speed-toggle label { cursor: pointer; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .metric-grid { grid-template-columns: 1fr 1fr; }
+    .charts-row  { grid-template-columns: 1fr; }
+    .insights-grid { grid-template-columns: 1fr; }
+    .sim-modal { width: 98vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">◉ Disco</div>
+  <div class="header-sub">Ad Performance Predictor — see before you show</div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR: INPUT FORM -->
+<aside class="sidebar">
+  <h2>Configure Impression</h2>
+
+  <div class="section-label">📍 Placement Context</div>
+
+  <div class="form-group">
+    <label>Publisher (hosting page)</label>
+    <select id="publisher_uuid" onchange="onPubChange()">
+      {% for p in publishers %}
+      <option value="{{ p.PUBLISHER_UUID }}" data-cat="{{ p.PRIMARY_CATEGORY }}">{{ p.BRAND_NAME }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Advertiser Brand (shown in widget)</label>
+    <select id="brand_id" onchange="onAdvChange()">
+      {% for a in advertisers %}
+      <option value="{{ a.BRAND_ID }}" data-cat="{{ a.PRIMARY_CATEGORY }}" data-desc="{{ a.DESCRIPTION[:80] if a.DESCRIPTION else '' }}">{{ a.BRAND_NAME }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Page Type</label>
+    <select id="page_type">
+      <option value="ORDER_TRACKING">Order Tracking — shopper checking delivery</option>
+      <option value="THANK_YOU">Thank You — just after checkout (highest intent)</option>
+      <option value="ORDER_STATUS">Order Status — static revisit page</option>
+      <option value="SUPPORT_CENTER">Support Center</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Widget Type</label>
+    <select id="widget_type">
+      <option value="APP_NATIVE_ESSENTIAL">App Native Essential</option>
+      <option value="SHOPIFY_NATIVE_ESSENTIAL">Shopify Native Essential</option>
+      <option value="ESSENTIAL">Essential (generic web)</option>
+      <option value="APP_NATIVE_BRAND_VISUAL">App Native Brand Visual</option>
+      <option value="LEAD_GEN">Lead Gen</option>
+      <option value="SHOPIFY_NATIVE_LEAD_GEN">Shopify Native Lead Gen</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Display Placement</label>
+    <select id="placement">
+      <option value="INLINE">Inline — within page flow</option>
+      <option value="PULLUP">Pull-Up — bottom sheet</option>
+      <option value="FULLSCREEN">Fullscreen — modal takeover</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Shopper Device</label>
+    <select id="os_class">
+      <option value="Mobile">Mobile</option>
+      <option value="Desktop">Desktop</option>
+      <option value="Unknown">Unknown / SDK</option>
+    </select>
+  </div>
+
+  <div class="section-label">🛍️ Shopper Profile</div>
+
+  <div class="form-group">
+    <label>Lifetime Value (USD)</label>
+    <div class="slider-row">
+      <input type="range" id="ltv_range" min="0" max="{{ max_ltv }}" step="5" value="{{ default_ltv }}" oninput="syncSlider('ltv','$')">
+      <span class="slider-val" id="ltv_display">${{ default_ltv }}</span>
+    </div>
+    <input type="hidden" id="ltv" value="{{ default_ltv }}">
+  </div>
+
+  <div class="form-group">
+    <label>Avg Order Value (USD)</label>
+    <div class="slider-row">
+      <input type="range" id="aov_range" min="0" max="{{ max_aov }}" step="5" value="{{ default_aov }}" oninput="syncSlider('aov','$')">
+      <span class="slider-val" id="aov_display">${{ default_aov }}</span>
+    </div>
+    <input type="hidden" id="aov" value="{{ default_aov }}">
+  </div>
+
+  <div class="form-group">
+    <label>Number of Past Purchases</label>
+    <div class="slider-row">
+      <input type="range" id="np_range" min="0" max="20" step="1" value="{{ default_np }}" oninput="syncSlider('num_purchases','')">
+      <span class="slider-val" id="num_purchases_display">{{ default_np }}</span>
+    </div>
+    <input type="hidden" id="num_purchases" value="{{ default_np }}">
+  </div>
+
+  <div class="form-group">
+    <label>Shopper Behaviour Flags</label>
+    <div class="checks">
+      <label class="check-pill" id="pill_sub">
+        <input type="checkbox" id="bought_subscription" onchange="togglePill('sub')"> 🔄 Subscriber
+      </label>
+      <label class="check-pill" id="pill_disc">
+        <input type="checkbox" id="discount_shopper" onchange="togglePill('disc')"> 🏷️ Discount Seeker
+      </label>
+      <label class="check-pill" id="pill_ref">
+        <input type="checkbox" id="refunded" onchange="togglePill('ref')"> ↩️ Has Refunded
+      </label>
+    </div>
+  </div>
+
+  <button class="predict-btn" onclick="runPredict()">⚡ Predict Performance</button>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- Empty state -->
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">🎯</div>
+    <h3>Configure an impression on the left</h3>
+    <p>Select a publisher, advertiser brand, and shopper profile — then hit <strong>Predict Performance</strong> to see how this ad placement is likely to perform.</p>
+  </div>
+
+  <!-- Results (hidden until prediction) -->
+  <div class="results" id="results">
+
+    <div class="result-header">
+      <div>
+        <div class="result-title" id="result-title">Prediction Results</div>
+        <div class="result-subtitle" id="result-subtitle"></div>
+      </div>
+      <button class="sim-btn" onclick="openSim()">▶ Run Live Simulation</button>
+    </div>
+
+    <!-- 3 top metrics -->
+    <div class="metric-grid">
+      <div class="metric-card ctr">
+        <div class="metric-label">Click-Through Rate</div>
+        <div class="metric-big ctr-color" id="m-ctr">—</div>
+        <div class="metric-plain" id="m-ctr-plain">—</div>
+        <div id="m-ctr-badge"></div>
+      </div>
+      <div class="metric-card cvr">
+        <div class="metric-label">Click-to-Convert Rate</div>
+        <div class="metric-big cvr-color" id="m-cvr">—</div>
+        <div class="metric-plain" id="m-cvr-plain">—</div>
+        <div id="m-cvr-badge"></div>
+      </div>
+      <div class="metric-card ecvr">
+        <div class="metric-label">Overall Conversion (eCVR)</div>
+        <div class="metric-big ecvr-color" id="m-ecvr">—</div>
+        <div class="metric-plain" id="m-ecvr-plain">—</div>
+      </div>
+    </div>
+
+    <!-- Gauge charts -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>CTR vs Network Average</h3>
+        <div class="chart-wrap"><canvas id="chart-ctr"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>CVR vs Network Average</h3>
+        <div class="chart-wrap"><canvas id="chart-cvr"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Funnel per 1,000 Impressions</h3>
+        <div class="chart-wrap"><canvas id="chart-funnel"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Visual funnel -->
+    <div class="funnel-card">
+      <h3>📊 Conversion Funnel — per 1,000 Impressions</h3>
+      <div class="funnel">
+        <div class="funnel-stage">
+          <div class="funnel-bar-wrap"><div class="funnel-bar impressions" id="f-bar-imp" style="height:90px"></div></div>
+          <div class="funnel-num" id="f-imp">1,000</div>
+          <div class="funnel-desc">Impressions shown</div>
+        </div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-stage">
+          <div class="funnel-bar-wrap"><div class="funnel-bar clicks" id="f-bar-clk" style="height:30px"></div></div>
+          <div class="funnel-num" id="f-clk">—</div>
+          <div class="funnel-desc">Shoppers click</div>
+        </div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-stage">
+          <div class="funnel-bar-wrap"><div class="funnel-bar converts" id="f-bar-cvt" style="height:3px"></div></div>
+          <div class="funnel-num" id="f-cvt">—</div>
+          <div class="funnel-desc">Convert & buy</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context insights -->
+    <div class="insights-grid">
+      <div class="insight-card">
+        <h4>📋 Impression Context</h4>
+        <div class="insight-row"><span class="insight-key">Publisher</span><span class="insight-val" id="i-pub">—</span></div>
+        <div class="insight-row"><span class="insight-key">Advertiser</span><span class="insight-val" id="i-adv">—</span></div>
+        <div class="insight-row"><span class="insight-key">Page Type</span><span class="insight-val" id="i-page">—</span></div>
+        <div class="insight-row"><span class="insight-key">Widget</span><span class="insight-val" id="i-widget">—</span></div>
+        <div class="insight-row"><span class="insight-key">Placement</span><span class="insight-val" id="i-placement">—</span></div>
+        <div class="insight-row"><span class="insight-key">Category Match</span><span class="insight-val" id="i-catmatch">—</span></div>
+      </div>
+      <div class="insight-card">
+        <h4>👤 Shopper Profile</h4>
+        <div class="insight-row"><span class="insight-key">Lifetime Value</span><span class="insight-val" id="i-ltv">—</span></div>
+        <div class="insight-row"><span class="insight-key">Avg Order Value</span><span class="insight-val" id="i-aov">—</span></div>
+        <div class="insight-row"><span class="insight-key">Past Purchases</span><span class="insight-val" id="i-np">—</span></div>
+        <div class="insight-row"><span class="insight-key">Subscriber</span><span class="insight-val" id="i-sub">—</span></div>
+        <div class="insight-row"><span class="insight-key">Discount Seeker</span><span class="insight-val" id="i-disc">—</span></div>
+        <div class="insight-row"><span class="insight-key">Device</span><span class="insight-val" id="i-device">—</span></div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</main>
+</div><!-- /layout -->
+
+<!-- SIMULATION MODAL -->
+<div class="sim-overlay" id="sim-overlay" onclick="closeSimOutside(event)">
+  <div class="sim-modal" id="sim-modal">
+
+    <div class="sim-modal-header">
+      <div>
+        <div class="sim-modal-title">🎬 Live Ad Simulation</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div class="speed-toggle">
+          <input type="checkbox" id="fast-mode" checked>
+          <label for="fast-mode">Fast mode</label>
+        </div>
+        <button class="sim-close" onclick="closeSim()">✕</button>
+      </div>
+    </div>
+
+    <div class="sim-body">
+      <!-- Fake browser window -->
+      <div class="fake-browser">
+        <div class="browser-bar">
+          <div class="browser-dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <div class="url-bar" id="sim-url">trackorder.disco-demo.com/order/DIS-38291</div>
+        </div>
+        <div class="page-content" id="page-content">
+          <div class="order-header">
+            <div class="store-logo" id="sim-pub-name">Store</div>
+            <div class="order-badge">✓ Order Confirmed</div>
+          </div>
+          <div class="order-confirm">
+            <h2>🎉 Your order is on its way!</h2>
+            <p>Order #DIS-38291 · Estimated delivery <strong>May 10–12</strong></p>
+            <p style="margin-top:6px;font-size:12px;color:#999;">We'll send you tracking updates by email.</p>
+          </div>
+
+          <!-- Disco widget (hidden initially) -->
+          <div class="disco-widget" id="disco-widget">
+            <div class="widget-header">
+              <span>🛍️ Shoppers like you also love…</span>
+              <span class="disco-tag">Powered by Disco</span>
+            </div>
+            <div class="brand-card" id="sim-brand-card">
+              <div class="brand-icon" id="sim-brand-icon">🛍️</div>
+              <div class="brand-info">
+                <h3 id="sim-brand-name">Brand Name</h3>
+                <p id="sim-brand-desc">Brand description</p>
+                <span class="brand-cat-tag" id="sim-brand-cat">Category</span>
+              </div>
+              <button class="shop-btn" id="sim-shop-btn">Shop Now →</button>
+            </div>
+            <div class="confetti-wrap" id="confetti-wrap"></div>
+          </div>
+        </div><!-- /page-content -->
+      </div><!-- /fake-browser -->
+
+      <!-- Status / controls -->
+      <div class="sim-status">
+        <div class="sim-steps" id="sim-steps">
+          <div class="sim-step" id="step-1">1. Page Loads</div>
+          <div class="sim-step" id="step-2">2. Widget Appears</div>
+          <div class="sim-step" id="step-3">3. Shopper Browses</div>
+          <div class="sim-step" id="step-4">4. Click Decision</div>
+          <div class="sim-step" id="step-5">5. Outcome</div>
+        </div>
+
+        <div class="sim-outcome" id="sim-outcome">
+          <div class="outcome-icon" id="outcome-icon">—</div>
+          <div class="outcome-text" id="outcome-text">—</div>
+          <div class="outcome-sub" id="outcome-sub">—</div>
+        </div>
+
+        <div class="sim-controls">
+          <button class="sim-run-btn" id="sim-run-btn" onclick="runSim()">▶ Run Simulation</button>
+        </div>
+      </div>
+
+    </div><!-- /sim-body -->
+  </div><!-- /sim-modal -->
+</div><!-- /sim-overlay -->
+
+<!-- Floating cursor SVG -->
+<svg class="cursor" id="sim-cursor" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 0L4 20L8 16L11 22L13 21L10 15L16 15Z"/>
+</svg>
+
+<!-- DATA PASSED FROM SERVER -->
+<script>
+const PUB_CAT  = {{ pub_cat_map|safe }};
+const ADV_CAT  = {{ adv_cat_map|safe }};
+const ADV_DESC = {{ adv_desc_map|safe }};
+const ADV_NAME = {{ adv_name_map|safe }};
+const PUB_NAME = {{ pub_name_map|safe }};
+</script>
+
+<script>
+// --- Chart instances ---
+let chartCTR = null, chartCVR = null, chartFunnel = null;
+
+// --- Last prediction result ---
+let lastResult = null;
+
+// --- Slider sync ---
+function syncSlider(id, prefix) {
+  const rng = document.getElementById(id + '_range');
+  const hidden = document.getElementById(id);
+  const display = document.getElementById(id + '_display');
+  hidden.value = rng.value;
+  display.textContent = prefix + parseFloat(rng.value).toFixed(prefix === '$' ? 2 : 0);
+}
+
+// --- Check pill toggle ---
+function togglePill(key) {
+  const el = document.getElementById('pill_' + key);
+  el.classList.toggle('active');
+}
+
+// --- Publisher / advertiser change ---
+function onPubChange() {}
+function onAdvChange() {}
+
+// --- Collect form data ---
+function getFormData() {
+  return {
+    publisher_uuid:      document.getElementById('publisher_uuid').value,
+    brand_id:            document.getElementById('brand_id').value,
+    page_type:           document.getElementById('page_type').value,
+    widget_type:         document.getElementById('widget_type').value,
+    placement:           document.getElementById('placement').value,
+    os_class:            document.getElementById('os_class').value,
+    widget_version:      0.2,
+    ltv:                 parseFloat(document.getElementById('ltv').value),
+    aov:                 parseFloat(document.getElementById('aov').value),
+    num_purchases:       parseInt(document.getElementById('num_purchases').value),
+    bought_subscription: document.getElementById('bought_subscription').checked ? 1 : 0,
+    discount_shopper:    document.getElementById('discount_shopper').checked ? 1 : 0,
+    refunded:            document.getElementById('refunded').checked ? 1 : 0,
+  };
+}
+
+// --- Run prediction ---
+async function runPredict() {
+  const btn = document.querySelector('.predict-btn');
+  btn.textContent = '⏳ Running…';
+  btn.disabled = true;
+
+  try {
+    const res  = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getFormData()),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    lastResult = data;
+    renderResults(data);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.textContent = '⚡ Predict Performance';
+    btn.disabled = false;
+  }
+}
+
+// --- Render results ---
+function renderResults(d) {
+  document.getElementById('empty-state').style.display = 'none';
+  const res = document.getElementById('results');
+  res.classList.add('visible');
+
+  // Header
+  document.getElementById('result-title').textContent = `${d.brand_name}  ·  ${d.pub_name}`;
+  document.getElementById('result-subtitle').textContent = `${d.page_type} · ${d.placement} · Prediction generated now`;
+
+  // Big numbers
+  document.getElementById('m-ctr').textContent     = (d.pred_click * 100).toFixed(2) + '%';
+  document.getElementById('m-ctr-plain').textContent = `1 in ${d.click_1_in} shoppers will click this ad`;
+
+  document.getElementById('m-cvr').textContent     = (d.pred_convert * 100).toFixed(2) + '%';
+  document.getElementById('m-cvr-plain').textContent = `1 in ${d.convert_1_in} who click will buy`;
+
+  document.getElementById('m-ecvr').textContent    = (d.ecvr * 100).toFixed(3) + '%';
+  document.getElementById('m-ecvr-plain').textContent = `1 in ${Math.round(1/d.ecvr)} impressions → a conversion`;
+
+  // Badges
+  function badge(pct, id) {
+    const el = document.getElementById(id);
+    const cls = pct > 5 ? 'badge-up' : pct < -5 ? 'badge-down' : 'badge-flat';
+    const sign = pct > 0 ? '+' : '';
+    el.innerHTML = `<span class="metric-badge ${cls}">${sign}${pct}% vs avg</span>`;
+  }
+  badge(d.vs_avg_ctr, 'm-ctr-badge');
+  badge(d.vs_avg_cvr, 'm-cvr-badge');
+
+  // Funnel
+  const imp = 1000;
+  const clk = Math.round(imp * d.pred_click);
+  const cvt = Math.round(imp * d.ecvr);
+  document.getElementById('f-clk').textContent = clk;
+  document.getElementById('f-cvt').textContent = cvt;
+  document.getElementById('f-bar-clk').style.height = Math.max(4, (clk / imp) * 90) + 'px';
+  document.getElementById('f-bar-cvt').style.height = Math.max(4, (cvt / imp) * 90) + 'px';
+
+  // Context panel
+  document.getElementById('i-pub').innerHTML      = `<span class="tag tag-purple">${d.pub_name}</span>`;
+  document.getElementById('i-adv').innerHTML      = `<span class="tag tag-teal">${d.brand_name}</span>`;
+  document.getElementById('i-page').innerHTML     = pageLabel(d.page_type);
+  document.getElementById('i-widget').textContent = d.page_type;
+  const fd = getFormData();
+  document.getElementById('i-placement').innerHTML = placementLabel(fd.placement);
+  document.getElementById('i-catmatch').innerHTML  = d.same_category
+    ? '<span class="tag tag-green">✓ Same category</span>'
+    : '<span class="tag tag-yellow">Different category</span>';
+  document.getElementById('i-ltv').textContent  = '$' + parseFloat(fd.ltv).toFixed(0);
+  document.getElementById('i-aov').textContent  = '$' + parseFloat(fd.aov).toFixed(0);
+  document.getElementById('i-np').textContent   = fd.num_purchases + ' orders';
+  document.getElementById('i-sub').textContent  = fd.bought_subscription ? '✓ Yes' : 'No';
+  document.getElementById('i-disc').textContent = fd.discount_shopper    ? '✓ Yes' : 'No';
+  document.getElementById('i-device').innerHTML = deviceLabel(fd.os_class);
+
+  renderCharts(d);
+}
+
+function pageLabel(pt) {
+  const m = { THANK_YOU: '🎉 Thank You Page', ORDER_TRACKING: '📦 Order Tracking', ORDER_STATUS: '📋 Order Status', SUPPORT_CENTER: '💬 Support Center' };
+  return `<span class="tag tag-purple">${m[pt] || pt}</span>`;
+}
+function placementLabel(p) {
+  const m = { INLINE: '📄 Inline', PULLUP: '⬆️ Pull-Up', FULLSCREEN: '🖥️ Fullscreen' };
+  return `<span class="tag tag-teal">${m[p] || p}</span>`;
+}
+function deviceLabel(o) {
+  const m = { Mobile: '📱 Mobile', Desktop: '💻 Desktop', Unknown: '❓ Unknown' };
+  return m[o] || o;
+}
+
+// --- Charts ---
+function renderCharts(d) {
+  // Gauge: CTR
+  const ctrData  = [d.pred_click * 100, d.avg_ctr * 100, Math.max(0, 10 - d.pred_click * 100 - d.avg_ctr * 100)];
+  const cvrData  = [d.pred_convert * 100, d.avg_cvr * 100, Math.max(0, 10 - d.pred_convert * 100 - d.avg_cvr * 100)];
+
+  if (chartCTR)   { chartCTR.destroy(); }
+  if (chartCVR)   { chartCVR.destroy(); }
+  if (chartFunnel){ chartFunnel.destroy(); }
+
+  const gaugeOpts = (labels, data, colors) => ({
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
+    options: {
+      cutout: '68%', rotation: -90, circumference: 180,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.raw.toFixed(2) + '%' } } },
+      animation: { animateRotate: true, duration: 800 },
+    }
+  });
+
+  chartCTR = new Chart(document.getElementById('chart-ctr'), gaugeOpts(
+    ['This impression', 'Network avg', 'Remaining'],
+    [d.pred_click * 100, d.avg_ctr * 100, Math.max(0, 8 - d.pred_click * 100 - d.avg_ctr * 100)],
+    ['#7C5CBF', '#00B4D8', '#1E1E3A']
+  ));
+
+  chartCVR = new Chart(document.getElementById('chart-cvr'), gaugeOpts(
+    ['This impression', 'Network avg', 'Remaining'],
+    [d.pred_convert * 100, d.avg_cvr * 100, Math.max(0, 8 - d.pred_convert * 100 - d.avg_cvr * 100)],
+    ['#00B4D8', '#06D6A0', '#1E1E3A']
+  ));
+
+  // Bar chart: funnel per 1000
+  const imp = 1000, clk = Math.round(imp * d.pred_click), cvt = Math.round(imp * d.ecvr);
+  chartFunnel = new Chart(document.getElementById('chart-funnel'), {
+    type: 'bar',
+    data: {
+      labels: ['Impressions', 'Clicks', 'Converts'],
+      datasets: [{
+        data: [imp, clk, cvt],
+        backgroundColor: ['rgba(124,92,191,0.8)', 'rgba(0,180,216,0.8)', 'rgba(6,214,160,0.8)'],
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#2A2A45' }, ticks: { color: '#8888AA', font: { size: 10 } } },
+        y: { grid: { color: '#2A2A45' }, ticks: { color: '#8888AA', font: { size: 10 } } },
+      },
+      animation: { duration: 700 },
+    }
+  });
+}
+
+// --- SIMULATION ---
+let simRunning = false;
+const CATEGORY_ICONS = {
+  'Apparel & Accessories': '👗', 'Beauty & Personal Care': '💄', 'Food & Beverage': '🍕',
+  'Health & Wellness': '🏃', 'Pet': '🐾', 'Finance': '💳', 'Media & Entertainment': '🎵',
+  'Home & Kitchen': '🏠', 'Baby & Toddler': '🍼', 'Loyalty & Affiliates': '⭐',
+  'Gaming & Betting': '🎮', 'Automotive': '🚗', 'Professional Services': '💼',
+};
+
+function openSim() {
+  if (!lastResult) return;
+  document.getElementById('sim-overlay').classList.add('active');
+  prepareSim();
+}
+function closeSim() {
+  document.getElementById('sim-overlay').classList.remove('active');
+  resetSim();
+  hideCursor();
+}
+function closeSimOutside(e) {
+  if (e.target === document.getElementById('sim-overlay')) closeSim();
+}
+
+function prepareSim() {
+  const d = lastResult;
+  const fd = getFormData();
+  // Brand info
+  document.getElementById('sim-pub-name').textContent  = d.pub_name;
+  document.getElementById('sim-brand-name').textContent = d.brand_name;
+  document.getElementById('sim-brand-desc').textContent = d.brand_desc ? d.brand_desc.substring(0, 100) : d.adv_category;
+  document.getElementById('sim-brand-cat').textContent  = d.adv_category;
+  document.getElementById('sim-brand-icon').textContent = CATEGORY_ICONS[d.adv_category] || '🛍️';
+
+  // Page type in URL
+  const urlMap = { THANK_YOU: 'thank-you', ORDER_TRACKING: 'track', ORDER_STATUS: 'order-status', SUPPORT_CENTER: 'help' };
+  document.getElementById('sim-url').textContent = d.pub_name.toLowerCase().replace(/\s/g,'-') + '.disco-demo.com/' + (urlMap[d.page_type]||'order') + '/DIS-38291';
+
+  resetSim();
+}
+
+function resetSim() {
+  simRunning = false;
+  document.getElementById('sim-run-btn').disabled = false;
+  document.getElementById('sim-run-btn').textContent = '▶ Run Simulation';
+
+  // Reset widget
+  const widget = document.getElementById('disco-widget');
+  widget.classList.remove('show');
+
+  // Reset steps
+  ['step-1','step-2','step-3','step-4','step-5'].forEach(s => {
+    const el = document.getElementById(s);
+    el.className = 'sim-step';
+  });
+
+  // Reset outcome
+  const out = document.getElementById('sim-outcome');
+  out.classList.remove('show');
+
+  // Reset button
+  const shopBtn = document.getElementById('sim-shop-btn');
+  shopBtn.style.background = '';
+  shopBtn.classList.remove('pulse');
+
+  // Clear confetti
+  document.getElementById('confetti-wrap').innerHTML = '';
+
+  hideCursor();
+}
+
+function hideCursor() {
+  const c = document.getElementById('sim-cursor');
+  c.classList.remove('show');
+}
+
+function stepActive(id) {
+  document.getElementById(id).classList.add('active');
+}
+function stepDone(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('active');
+  el.classList.add('done');
+}
+function stepFail(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('active');
+  el.classList.add('failed');
+}
+
+function delay(ms) {
+  const factor = document.getElementById('fast-mode').checked ? 0.45 : 1;
+  return new Promise(r => setTimeout(r, ms * factor));
+}
+
+async function runSim() {
+  if (simRunning || !lastResult) return;
+  simRunning = true;
+  document.getElementById('sim-run-btn').disabled = true;
+  document.getElementById('sim-run-btn').textContent = '⏳ Running…';
+
+  resetSim();
+  simRunning = true;
+
+  const d = lastResult;
+
+  // Step 1: page loads
+  stepActive('step-1');
+  await delay(800);
+  stepDone('step-1');
+
+  // Step 2: widget appears
+  stepActive('step-2');
+  await delay(600);
+  document.getElementById('disco-widget').classList.add('show');
+  await delay(700);
+  stepDone('step-2');
+
+  // Step 3: cursor appears & browses
+  stepActive('step-3');
+  const cursor = document.getElementById('sim-cursor');
+  const shopBtn = document.getElementById('sim-shop-btn');
+  const shopRect = shopBtn.getBoundingClientRect();
+  const pageContentRect = document.getElementById('page-content').getBoundingClientRect();
+
+  // Start cursor near order confirm section
+  moveCursorTo(pageContentRect.left + 200, pageContentRect.top + 80);
+  cursor.classList.add('show');
+  await delay(400);
+
+  // Move cursor to browse widget
+  await animateCursor(pageContentRect.left + 300, pageContentRect.top + 200, 600);
+  await delay(400);
+  await animateCursor(shopRect.left + 20, shopRect.top + 15, 800);
+  await delay(300);
+  stepDone('step-3');
+
+  // Step 4: click decision
+  stepActive('step-4');
+  await delay(500);
+
+  const willClick = Math.random() < d.pred_click;
+
+  if (willClick) {
+    // Click animation
+    shopBtn.classList.add('pulse');
+    await delay(300);
+    stepDone('step-4');
+
+    // Step 5: conversion decision
+    stepActive('step-5');
+    await delay(600);
+
+    const willConvert = Math.random() < d.pred_convert;
+
+    // Move cursor off screen
+    await animateCursor(shopRect.left + 200, shopRect.top - 40, 500);
+    cursor.classList.remove('show');
+
+    if (willConvert) {
+      // Show confetti
+      spawnConfetti();
+      document.getElementById('sim-shop-btn').style.background = 'linear-gradient(135deg, #06D6A0, #00B4D8)';
+      stepDone('step-5');
+      showOutcome('🎉', '💰 Conversion!', `${d.brand_name} acquired a new customer`, 'success');
+    } else {
+      stepFail('step-5');
+      document.getElementById('sim-shop-btn').style.background = 'linear-gradient(135deg, #888, #666)';
+      showOutcome('👋', 'Shopper left without converting', `Clicked but didn't complete a purchase on ${d.brand_name}`, 'fail');
+    }
+  } else {
+    // No click — cursor moves away
+    await animateCursor(pageContentRect.left + 100, pageContentRect.top + 60, 700);
+    cursor.classList.remove('show');
+    stepFail('step-4');
+    stepFail('step-5');
+    showOutcome('🚶', 'Shopper scrolled past', `Ad was shown but the shopper didn't engage`, 'skip');
+  }
+
+  document.getElementById('sim-run-btn').disabled = false;
+  document.getElementById('sim-run-btn').textContent = '↺ Run Again';
+  simRunning = false;
+}
+
+function showOutcome(icon, text, sub, type) {
+  const out = document.getElementById('sim-outcome');
+  document.getElementById('outcome-icon').textContent = icon;
+  document.getElementById('outcome-text').textContent  = text;
+  document.getElementById('outcome-sub').textContent   = sub;
+  out.classList.add('show');
+  out.style.color = type === 'success' ? '#06D6A0' : type === 'fail' ? '#FFD166' : '#8888AA';
+}
+
+let cursorX = 0, cursorY = 0;
+function moveCursorTo(x, y) {
+  cursorX = x; cursorY = y;
+  const c = document.getElementById('sim-cursor');
+  c.style.left = x + 'px';
+  c.style.top  = y + 'px';
+}
+
+function animateCursor(toX, toY, duration) {
+  return new Promise(resolve => {
+    const fromX = cursorX, fromY = cursorY;
+    const start = performance.now();
+    const factor = document.getElementById('fast-mode').checked ? 0.45 : 1;
+    const dur = duration * factor;
+
+    function frame(now) {
+      const t = Math.min((now - start) / dur, 1);
+      const eased = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      const x = fromX + (toX - fromX) * eased;
+      const y = fromY + (toY - fromY) * eased;
+      moveCursorTo(x, y);
+      if (t < 1) requestAnimationFrame(frame);
+      else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function spawnConfetti() {
+  const wrap = document.getElementById('confetti-wrap');
+  const colors = ['#7C5CBF','#00B4D8','#06D6A0','#FFD166','#F72585','#FFF'];
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.cssText = `
+      left: ${Math.random()*100}%;
+      top: ${Math.random()*30}%;
+      background: ${colors[Math.floor(Math.random()*colors.length)]};
+      animation-delay: ${Math.random()*0.5}s;
+      transform: rotate(${Math.random()*360}deg);
+      width: ${5 + Math.random()*8}px;
+      height: ${5 + Math.random()*8}px;
+    `;
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+}
+
+// Keyboard: Esc closes modal
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSim(); });
+</script>
+</body>
+</html>

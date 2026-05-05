@@ -7,3 +7,6 @@ matplotlib
 seaborn
 jupyterlab
 ipykernel
+joblib
+scipy
+flask

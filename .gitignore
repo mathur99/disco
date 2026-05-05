@@ -1,5 +1,6 @@
 # Python env
 assignment/
+pyenv/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -11,8 +12,9 @@ build/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data (large raw files — keep processed outputs)
+# Data
 data/raw/
+data/processed/*.joblib
 
 # OS
 .DS_Store
