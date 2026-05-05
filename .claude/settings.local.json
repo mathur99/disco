@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m venv assignment)",
+      "Bash(gh auth *)",
+      "Bash(gh --version)",
+      "Bash(gh repo *)"
+    ]
+  }
+}
