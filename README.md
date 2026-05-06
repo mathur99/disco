@@ -34,12 +34,31 @@ Every run is a fresh random draw against the model's probabilities. Run it ten t
 ```bash
 python3.11 -m venv pyenv && source pyenv/bin/activate
 pip install -r requirements.txt
+```
 
-python src/train.py                              # trains + saves models to data/processed/
-python app/app.py                                # prediction UI at http://127.0.0.1:5050
+**Option A — download pre-trained model (recommended)**
 
-# when holdout arrives:
-python src/predict.py --holdout data/raw/events_holdout.csv
+Download `artifacts_20260506_111609.joblib` from the [v1.0 Release](https://github.com/mathur99/disco/releases/tag/v1.0), place it in `models/`, then create the symlink:
+
+```bash
+mkdir -p models
+mv artifacts_20260506_111609.joblib models/
+ln -sf artifacts_20260506_111609.joblib models/latest.joblib
+```
+
+**Option B — retrain from scratch** *(requires raw CSVs in `data/raw/`)*
+
+```bash
+python src/train.py
+```
+
+**Then:**
+
+```bash
+python app/app.py                                # UI at http://127.0.0.1:5050
+
+# when holdout file arrives:
+python src/predict.py --holdout data/raw/events_holdout.csv --output predictions_holdout.csv
 ```
 
 ## Project layout
