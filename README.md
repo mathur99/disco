@@ -314,12 +314,23 @@ LogReg gap vs trees (~0.005 PR-AUC) tells us non-linear interactions exist but a
 
 ---
 
-## App
+## App *(not asked for, built anyway)*
 
-Interactive prediction UI + live simulation at `http://127.0.0.1:5050`
+Numbers on a page are hard to trust. A model can say "this impression has a 6.2% CTR" but that means nothing until you actually see what the shopper sees — the page, the widget, the brand ad — and ask yourself *"would I click this?"*
+
+So I built a prediction UI with a live ad simulation. It wasn't part of the assignment. It exists because humans are bad at reasoning about probabilities in the abstract but very good at reasoning about things they can see.
 
 ```bash
-python app/app.py
+python app/app.py   # → http://127.0.0.1:5050
 ```
 
-Configure any publisher/brand/shopper combination, hit predict, see CTR + CVR + funnel. "Run Live Simulation" opens a fake post-purchase page and animates whether the shopper clicks and converts, driven by the model's probabilities.
+**Prediction side** — pick any publisher, advertiser brand, page type, placement, and shopper profile. Hit predict. You get:
+- CTR and CVR as percentages + plain-language ("1 in 40 shoppers will click")
+- Gauges showing how this impression compares to the network average
+- A funnel: out of 1,000 impressions shown, how many click, how many buy
+
+**Simulation side** — hit "Run Live Simulation". A fake post-purchase order page loads. The Disco widget appears showing the advertiser's brand. An animated cursor moves across the screen, hovers over the ad, and then — based on the model's predicted probability — either clicks or scrolls away. If it clicks, you watch whether the shopper converts or bounces.
+
+Every run is a fresh random draw against the model's probabilities. Run it ten times on the same configuration and you'll see the randomness — sometimes clicks, sometimes doesn't — which is exactly how probability works in real life. That's the point.
+
+> The model says "3% CTR." The simulation lets you *watch* 3% happen. That's a different kind of understanding.
