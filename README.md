@@ -23,10 +23,15 @@ python src/predict.py --holdout data/raw/events_holdout.csv
 notebooks/          01_eda.ipynb, 02_modeling.ipynb
 src/                train.py — full pipeline; predict.py — holdout inference
 app/                Flask prediction UI with live simulation
-data/raw/           events_train.csv, brand_metadata.csv, user_metadata.csv
-data/processed/     model_artifacts.joblib, val_metrics.json
+data/raw/           events_train.csv, brand_metadata.csv, user_metadata.csv  (gitignored)
+data/processed/     val_metrics.json
+models/             artifacts_YYYYMMDD_HHMMSS.joblib  (gitignored, binary)
+                    metrics_YYYYMMDD_HHMMSS.json
+                    latest.joblib  →  symlink to most recent artifact
 reports/            feature importance + EDA plots
 ```
+
+Each `src/train.py` run produces a timestamped artifact and updates `models/latest.joblib`. `predict.py` and the Flask app both resolve `latest.joblib` automatically, or accept `--model path/to/specific.joblib` for rollback.
 
 ---
 

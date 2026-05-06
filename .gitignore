@@ -16,6 +16,9 @@ build/
 data/raw/
 data/processed/*.joblib
 
+# Models (large binaries — tracked by timestamp in git notes or external store)
+models/*.joblib
+
 # OS
 .DS_Store
 Thumbs.db

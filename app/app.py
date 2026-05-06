@@ -9,7 +9,14 @@ from pathlib import Path
 from flask import Flask, render_template, request, jsonify
 
 ROOT          = Path(__file__).parent.parent
-ARTIFACT_PATH = ROOT / "data/processed/model_artifacts.joblib"
+MODELS_DIR    = ROOT / "models"
+ARTIFACT_PATH = MODELS_DIR / "latest.joblib"
+if not ARTIFACT_PATH.exists():
+    # fallback: most recent timestamped artifact
+    artifacts = sorted(MODELS_DIR.glob("artifacts_*.joblib"))
+    if not artifacts:
+        raise FileNotFoundError("No model in models/. Run src/train.py first.")
+    ARTIFACT_PATH = artifacts[-1]
 BRANDS_PATH   = ROOT / "data/raw/brand_metadata.csv"
 USERS_PATH    = ROOT / "data/raw/user_metadata.csv"
 

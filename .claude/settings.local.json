@@ -4,7 +4,31 @@
       "Bash(python3 -m venv assignment)",
       "Bash(gh auth *)",
       "Bash(gh --version)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(mkdir -p reports)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(conda env *)",
+      "Bash(pyenv versions *)",
+      "Read(//Users/muditmathur/**)",
+      "Read(//Users/muditmathur/.local/share/**)",
+      "Read(//Users/muditmathur/miniconda3/**)",
+      "Read(//Users/muditmathur/anaconda3/**)",
+      "Read(//opt/homebrew/Cellar/python@3.11/3.11.14_3/bin/**)",
+      "Bash(/usr/bin/python3 --version)",
+      "Bash(/opt/homebrew/bin/python3.11 -m venv pyenv)",
+      "Bash(pyenv/bin/python --version)",
+      "Bash(pyenv/bin/pip install *)",
+      "Bash(pyenv/bin/python src/train.py)",
+      "Bash(pyenv/bin/python app/app.py)",
+      "Bash(curl -s http://127.0.0.1:5050/)",
+      "Bash(curl -s -X POST http://127.0.0.1:5050/predict -H 'Content-Type: application/json' -d '{\"publisher_uuid\":\"f8d1dab3-604d-48ef-ba42-6dca38a86d63\",\"brand_id\":\"5117\",\"page_type\":\"THANK_YOU\",\"widget_type\":\"APP_NATIVE_ESSENTIAL\",\"placement\":\"FULLSCREEN\",\"os_class\":\"Mobile\",\"ltv\":200,\"aov\":100,\"num_purchases\":2,\"bought_subscription\":0,\"discount_shopper\":0,\"refunded\":0}')",
+      "Bash(pkill -f \"pyenv/bin/python app/app.py\")",
+      "Bash(curl -s -X POST http://127.0.0.1:5050/predict -H 'Content-Type: application/json' -d '{\"publisher_uuid\":\"f8d1dab3-604d-48ef-ba42-6dca38a86d63\",\"brand_id\":\"5117\",\"page_type\":\"THANK_YOU\",\"widget_type\":\"ESSENTIAL\",\"placement\":\"FULLSCREEN\",\"os_class\":\"Mobile\",\"ltv\":500,\"aov\":150,\"num_purchases\":5,\"bought_subscription\":1,\"discount_shopper\":0,\"refunded\":0}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://127.0.0.1:5050/predict -H 'Content-Type: application/json' -d '{\"publisher_uuid\":\"e99c91ab-bf3e-495b-88d7-850436990761\",\"brand_id\":\"5087\",\"page_type\":\"THANK_YOU\",\"widget_type\":\"ESSENTIAL\",\"placement\":\"FULLSCREEN\",\"os_class\":\"Mobile\",\"ltv\":500,\"aov\":150,\"num_purchases\":5,\"bought_subscription\":1,\"discount_shopper\":0,\"refunded\":0}')",
+      "Bash(git check-ignore *)"
     ]
   }
 }
