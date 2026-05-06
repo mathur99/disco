@@ -83,34 +83,124 @@ Both are heavily imbalanced (37:1 and 28:1). Accuracy is useless here — a mode
 
 ## Feature engineering
 
-19 features total, built from joins across all three tables.
+The raw data has IDs, strings, skewed numbers, and JSON blobs — none of which a model can use directly. Below are the features we *created*, why each one exists, and a concrete example of how it's built.
 
-| Feature | Type | Why |
-|---|---|---|
-| `pub_ctr_enc` | smoothed target enc | Publisher's historical CTR — strongest signal in the whole model |
-| `brand_ctr_enc` | smoothed target enc | Brand's historical CTR across all publishers |
-| `pub_cvr_enc` / `brand_cvr_enc` | smoothed target enc | CVR variants for the CVR model (fitted on clicked subset only) |
-| `PAGE_TYPE_enc` | label enc | 3.47% vs 1.23% CTR spread across values |
-| `WIDGET_TYPE_enc` | label enc | LEAD_GEN vs ESSENTIAL — 0% vs 5.5% |
-| `BRAND_DISPLAY_PLACEMENT_enc` | label enc | FULLSCREEN 3× INLINE |
-| `OS_CLASS_enc` | label enc | Unknown SDK surface has highest CTR |
-| `adv_category_enc`, `pub_category_enc` | label enc | Advertiser + publisher vertical |
-| `same_category` | binary flag | Do publisher and advertiser share a category? Relevance signal |
-| `is_lead_gen` | binary flag | Zero-CTR widgets need explicit flagging |
-| `is_bot` | binary flag | Cloud/Hacker OS — 118 rows, kept but flagged |
-| `is_anonymous` | binary flag | Null IDENTITY_UUID → no user features available |
-| `log_ltv`, `log_aov` | log transform | LTV/AOV are right-skewed; log stabilises the scale |
-| `NUM_PURCHASES`, `BOUGHT_SUBSCRIPTION`, `DISCOUNT_SHOPPER`, `REFUNDED` | raw/binary | Shopper behaviour from user_metadata |
+---
 
-### Smoothed target encoding — the key design choice
+### `pub_ctr_enc` and `brand_ctr_enc` — publisher/brand click history
 
-For `PUBLISHER_UUID` and `BRAND_ID` (high cardinality), we use:
+**What it is:** Each publisher and brand gets a single number — their historical click rate — attached to every impression they appear in.
 
+**Why:** The publisher a shopper lands on is the strongest predictor of whether they'll click. Some publishers drive highly engaged shoppers; others get low-intent traffic. Raw publisher ID (a UUID string) means nothing to a model — this encoding turns it into signal.
+
+**How:**
+```python
+# For publisher e99c91ab with 1,000 impressions and 32 clicks:
+global_ctr = 0.0266            # average across all publishers
+k          = 30                # smoothing strength
+
+enc = (32 + 30 × 0.0266) / (1000 + 30) = 0.0318   # close to their real 3.2% CTR
+
+# For a new publisher with only 2 impressions and 1 click:
+enc = (1 + 30 × 0.0266) / (2 + 30) = 0.0562       # pulled toward global mean, not 50%
 ```
-enc = (sum_clicks + k × global_mean) / (count + k)    k = 30
+The `k=30` term is the smoothing. Without it, a brand with 1 impression and 1 click looks like a 100% CTR brand. With it, you need meaningful volume before your own history dominates. **This is the #1 feature in the CTR model.**
+
+`brand_ctr_enc` does the same thing at the brand level. `pub_cvr_enc` / `brand_cvr_enc` are identical but use conversion rate instead of CTR, fitted only on the clicked subset for the CVR model.
+
+---
+
+### `same_category` — publisher and advertiser in the same vertical
+
+**What it is:** 1 if the publisher and the advertiser brand share the same `PRIMARY_CATEGORY`, 0 otherwise.
+
+**Why:** A shopper who just bought running shoes on a sportswear site is more likely to click another sports/apparel brand than a finance app. Category match is a proxy for relevance.
+
+**How:**
+```python
+# Publisher: Sirena Intimates → category = "Apparel & Accessories"
+# Advertiser: CoinOne Shopping → category = "Loyalty & Affiliates"
+same_category = (adv_category == pub_category)  →  0   # no match
+
+# Publisher: PetCo → category = "Pet"
+# Advertiser: BarkBox → category = "Pet"
+same_category = (adv_category == pub_category)  →  1   # match
+```
+From EDA: same-category impressions had **4.3% CTR vs 2.6% average** — a meaningful lift.
+
+---
+
+### `is_lead_gen` — flag for email-capture widgets
+
+**What it is:** 1 if `WIDGET_TYPE` is `LEAD_GEN` or `SHOPIFY_NATIVE_LEAD_GEN`, 0 otherwise.
+
+**Why:** These widgets are designed for email capture, not click-through. Their CTR is effectively 0% — they're not competing for clicks, they're collecting leads. If the model sees these without a flag, it would confuse low CTR with a bad brand or bad placement.
+
+**How:**
+```python
+is_lead_gen = WIDGET_TYPE.isin(["LEAD_GEN", "SHOPIFY_NATIVE_LEAD_GEN"])
+# → 1 for those rows, 0 for everything else
 ```
 
-A publisher with 2 impressions and 1 click doesn't get 50% CTR — it gets pulled toward the global mean. `k=30` means you need ~30 impressions before the publisher's own CTR dominates. This is the most impactful single feature.
+---
+
+### `is_bot` — flag for non-human traffic
+
+**What it is:** 1 if `OS_CLASS` is `Cloud` or `Hacker`, 0 otherwise.
+
+**Why:** Bots click at a different rate than humans (0.85% vs 2.66%). They're only 118 rows out of 471K so filtering them out makes no meaningful difference — but flagging them lets the model learn to discount those rows rather than treating them as noisy humans.
+
+**How:**
+```python
+is_bot = OS_CLASS.isin(["Cloud", "Hacker"])
+```
+
+---
+
+### `is_anonymous` — flag for shoppers with no identity
+
+**What it is:** 1 if `IDENTITY_UUID` is null, 0 otherwise.
+
+**Why:** 0.56% of shoppers have no identity — they're truly anonymous, no cross-session history. After the join with `user_metadata`, these rows get null values for LTV, AOV, etc. We fill those nulls with medians. But the model can't tell the difference between "LTV = median because they're average" and "LTV = median because we don't actually know." This flag makes that distinction explicit.
+
+**How:**
+```python
+is_anonymous = IDENTITY_UUID.isna().astype(int)
+```
+
+---
+
+### `log_ltv` and `log_aov` — log-transformed shopper value
+
+**What it is:** `log(1 + LTV)` and `log(1 + AOV)` instead of raw dollar values.
+
+**Why:** LTV and AOV are right-skewed — most shoppers have modest spend, but a few have LTV in the thousands. A raw value of 5,000 vs 50 creates a huge numeric range that can destabilise tree splits. Log-transform compresses the scale so a $50 vs $100 shopper and a $500 vs $1,000 shopper get treated with the same *relative* difference.
+
+**How:**
+```python
+# Shopper A: LTV = $50   → log(1 + 50)   = 3.93
+# Shopper B: LTV = $500  → log(1 + 500)  = 6.21
+# Shopper C: LTV = $5000 → log(1 + 5000) = 8.52
+# Without log: C is 100× A. With log: C is only 2.2× A.
+log_ltv = np.log1p(LTV)
+```
+
+---
+
+### `adv_category_enc` and `pub_category_enc` — brand verticals as numbers
+
+**What it is:** The advertiser's and publisher's `PRIMARY_CATEGORY` encoded as integers (e.g. "Apparel & Accessories" → 0, "Beauty" → 1, ...).
+
+**Why:** Category has strong CTR signal (Loyalty & Affiliates at 3.2% vs Pet at 0.6%). Raw strings can't go into a model — label encoding turns them into ordinal integers. Not perfect (implies ordering that doesn't exist) but tree models split on thresholds so it works fine in practice.
+
+**How:**
+```python
+le = LabelEncoder()
+le.fit(train["adv_category"].fillna("unknown"))
+adv_category_enc = le.transform(val["adv_category"].fillna("unknown"))
+# "Apparel & Accessories" → 0, "Automotive" → 1, "Baby & Toddler" → 2, ...
+# Unseen category in val → -1
+```
 
 ---
 
