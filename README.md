@@ -4,6 +4,29 @@ Two-model ML pipeline for Disco's post-purchase ad network: predict which shoppe
 
 ---
 
+## App *(not asked for, built anyway)*
+
+Numbers on a page are hard to trust. A model can say "this impression has a 6.2% CTR" but that means nothing until you actually see what the shopper sees — the page, the widget, the brand ad — and ask yourself *"would I click this?"*
+
+So I built a prediction UI with a live ad simulation. It wasn't part of the assignment. It exists because humans are bad at reasoning about probabilities in the abstract but very good at reasoning about things they can see.
+
+```bash
+python app/app.py   # → http://127.0.0.1:5050
+```
+
+**Prediction side** — pick any publisher, advertiser brand, page type, placement, and shopper profile. Hit predict. You get:
+- CTR and CVR as percentages + plain-language ("1 in 40 shoppers will click")
+- Gauges showing how this impression compares to the network average
+- A funnel: out of 1,000 impressions shown, how many click, how many buy
+
+**Simulation side** — hit "Run Live Simulation". A fake post-purchase order page loads. The Disco widget appears showing the advertiser's brand. An animated cursor moves across the screen, hovers over the ad, and then — based on the model's predicted probability — either clicks or scrolls away. If it clicks, you watch whether the shopper converts or bounces.
+
+Every run is a fresh random draw against the model's probabilities. Run it ten times on the same configuration and you'll see the randomness — sometimes clicks, sometimes doesn't — which is exactly how probability works in real life. That's the point.
+
+> The model says "3% CTR." The simulation lets you *watch* 3% happen. That's a different kind of understanding.
+
+---
+
 ## Quick start
 
 ```bash
@@ -311,26 +334,3 @@ LogReg gap vs trees (~0.005 PR-AUC) tells us non-linear interactions exist but a
 | Feature serving latency | `pub_ctr_enc` needs recent click aggregates in real-time | Feature store with sub-10ms lookups; not a batch join |
 | Bot traffic | Current model flags but doesn't filter bots | Upstream filter — model shouldn't need to learn to ignore scrapers |
 | Feedback loop | Model boosts high-CTR publishers → they get more impressions → CTR encoding becomes self-fulfilling | Periodic retraining with exploration budget |
-
----
-
-## App *(not asked for, built anyway)*
-
-Numbers on a page are hard to trust. A model can say "this impression has a 6.2% CTR" but that means nothing until you actually see what the shopper sees — the page, the widget, the brand ad — and ask yourself *"would I click this?"*
-
-So I built a prediction UI with a live ad simulation. It wasn't part of the assignment. It exists because humans are bad at reasoning about probabilities in the abstract but very good at reasoning about things they can see.
-
-```bash
-python app/app.py   # → http://127.0.0.1:5050
-```
-
-**Prediction side** — pick any publisher, advertiser brand, page type, placement, and shopper profile. Hit predict. You get:
-- CTR and CVR as percentages + plain-language ("1 in 40 shoppers will click")
-- Gauges showing how this impression compares to the network average
-- A funnel: out of 1,000 impressions shown, how many click, how many buy
-
-**Simulation side** — hit "Run Live Simulation". A fake post-purchase order page loads. The Disco widget appears showing the advertiser's brand. An animated cursor moves across the screen, hovers over the ad, and then — based on the model's predicted probability — either clicks or scrolls away. If it clicks, you watch whether the shopper converts or bounces.
-
-Every run is a fresh random draw against the model's probabilities. Run it ten times on the same configuration and you'll see the randomness — sometimes clicks, sometimes doesn't — which is exactly how probability works in real life. That's the point.
-
-> The model says "3% CTR." The simulation lets you *watch* 3% happen. That's a different kind of understanding.
