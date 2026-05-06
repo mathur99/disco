@@ -6,6 +6,8 @@ Two-model ML pipeline for Disco's post-purchase ad network: predict which shoppe
 
 ## App *(not asked for, built anyway)*
 
+![Disco Ad Performance Predictor](reports/app_screenshot.png)
+
 Numbers on a page are hard to trust. A model can say "this impression has a 6.2% CTR" but that means nothing until you actually see what the shopper sees — the page, the widget, the brand ad — and ask yourself *"would I click this?"*
 
 So I built a prediction UI with a live ad simulation. It wasn't part of the assignment. It exists because humans are bad at reasoning about probabilities in the abstract but very good at reasoning about things they can see.

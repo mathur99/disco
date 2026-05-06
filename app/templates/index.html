@@ -27,6 +27,47 @@
   .header-logo { font-size: 22px; font-weight: 800; background: linear-gradient(135deg, var(--purple), var(--teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px; }
   .header-sub { color: var(--muted); font-size: 13px; }
 
+  /* PRESET STRIP */
+  .preset-strip { background: var(--card); border-bottom: 1px solid var(--border); padding: 14px 24px; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .preset-strip::-webkit-scrollbar { height: 4px; }
+  .preset-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .preset-strip-label { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); vertical-align: middle; margin-right: 14px; }
+  .preset-cards { display: inline-flex; gap: 10px; }
+
+  .preset-card {
+    display: inline-flex; flex-direction: column; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 11px 14px; cursor: pointer; min-width: 190px; max-width: 220px;
+    white-space: normal; vertical-align: top;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+    animation: card-in .35s ease both;
+    position: relative; overflow: hidden;
+  }
+  .preset-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 12px 12px 0 0;
+  }
+  .preset-card.badge-ctr::before  { background: linear-gradient(90deg, var(--purple), var(--teal)); }
+  .preset-card.badge-cvr::before  { background: linear-gradient(90deg, var(--green), var(--teal)); }
+  .preset-card.badge-both::before { background: linear-gradient(90deg, var(--pink), var(--purple), var(--teal)); }
+
+  .preset-card:hover { transform: translateY(-3px); border-color: var(--purple); box-shadow: 0 8px 24px rgba(124,92,191,.25); }
+  .preset-card.active { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,180,216,.3); }
+
+  @keyframes card-in { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+
+  .preset-top { display: flex; align-items: center; gap: 7px; }
+  .preset-emoji { font-size: 18px; line-height: 1; }
+  .preset-name  { font-size: 12px; font-weight: 700; color: var(--text); }
+  .preset-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 800;
+    margin-top: 2px; letter-spacing: 0.3px;
+  }
+  .badge-ctr  .preset-badge { background: rgba(124,92,191,.2); color: #A78BFA; }
+  .badge-cvr  .preset-badge { background: rgba(6,214,160,.2);  color: var(--green); }
+  .badge-both .preset-badge { background: rgba(247,37,133,.15); color: #F9A8D4; }
+  .preset-tagline { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .preset-route { font-size: 10px; color: var(--border); margin-top: 4px; }
+
   /* LAYOUT */
   .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: calc(100vh - 57px); }
 
@@ -269,6 +310,14 @@
 <div class="header">
   <div class="header-logo">◉ Disco</div>
   <div class="header-sub">Ad Performance Predictor — see before you show</div>
+</div>
+
+<!-- PRESET STRIP -->
+<div class="preset-strip">
+  <span class="preset-strip-label">⚡ Quick scenarios</span>
+  <div class="preset-cards" id="preset-cards">
+    <!-- injected by JS -->
+  </div>
 </div>
 
 <!-- LAYOUT -->
@@ -585,6 +634,7 @@ const ADV_CAT  = {{ adv_cat_map|safe }};
 const ADV_DESC = {{ adv_desc_map|safe }};
 const ADV_NAME = {{ adv_name_map|safe }};
 const PUB_NAME = {{ pub_name_map|safe }};
+const PRESETS  = {{ presets|safe }};
 </script>
 
 <script>
@@ -1025,6 +1075,70 @@ function spawnConfetti() {
 
 // Keyboard: Esc closes modal
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSim(); });
+
+// --- PRESETS ---
+function buildPresetCards() {
+  const container = document.getElementById('preset-cards');
+  PRESETS.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = `preset-card badge-${p.badge_type}`;
+    card.id = `preset-${p.id}`;
+    card.style.animationDelay = `${i * 60}ms`;
+    card.innerHTML = `
+      <div class="preset-top">
+        <span class="preset-emoji">${p.emoji}</span>
+        <span class="preset-name">${p.label}</span>
+      </div>
+      <span class="preset-badge">${p.badge}</span>
+      <div class="preset-tagline">${p.tagline}</div>
+      <div class="preset-route">${p.pub_name} → ${p.brand_name}</div>
+    `;
+    card.addEventListener('click', () => applyPreset(p));
+    container.appendChild(card);
+  });
+}
+
+function applyPreset(p) {
+  // Highlight active card
+  document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+  document.getElementById(`preset-${p.id}`).classList.add('active');
+
+  // Dropdowns
+  document.getElementById('publisher_uuid').value = p.publisher_uuid;
+  document.getElementById('brand_id').value       = p.brand_id;
+  document.getElementById('page_type').value      = p.page_type;
+  document.getElementById('widget_type').value    = p.widget_type;
+  document.getElementById('placement').value      = p.placement;
+  document.getElementById('os_class').value       = p.os_class;
+
+  // Sliders — update range, hidden input, and display span together
+  function setSlider(id, val, prefix) {
+    document.getElementById(id + '_range').value  = val;
+    document.getElementById(id).value             = val;
+    document.getElementById(id + '_display').textContent =
+      prefix + (prefix === '$' ? parseFloat(val).toFixed(2) : val);
+  }
+  setSlider('ltv',           p.ltv,           '$');
+  setSlider('aov',           p.aov,           '$');
+  setSlider('num_purchases', p.num_purchases, '');
+
+  // Checkboxes
+  document.getElementById('bought_subscription').checked = !!p.bought_subscription;
+  document.getElementById('discount_shopper').checked    = !!p.discount_shopper;
+  document.getElementById('refunded').checked            = !!p.refunded;
+
+  // Sync pill active states
+  ['sub','disc','ref'].forEach(k => {
+    const pill = document.getElementById('pill_' + k);
+    const cb = {sub:'bought_subscription', disc:'discount_shopper', ref:'refunded'}[k];
+    pill.classList.toggle('active', document.getElementById(cb).checked);
+  });
+
+  document.querySelector('.sidebar').scrollTop = 0;
+  setTimeout(runPredict, 80);
+}
+
+buildPresetCards();
 </script>
 </body>
 </html>
